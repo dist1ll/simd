@@ -92,17 +92,29 @@ unsafe fn proc3() {
     printx(v2);
 }
 unsafe fn proc4() {
-    //assume ascii
-    let bytes = "ln foo(x: u64, h^: * -> *) { /*  def */ }".as_bytes();
+    //assume ascii (minimum 16 characters)
+    let bytes = "ln xy = 13 + 37;".as_bytes();
 
     // this is a lookup table for ASCII conversions (WIP)
     // Note that the maximum 4 registers can hold is 64 bytes
-    let conv_table1: [u8; 64] = (0..64).to_array().transpose_table(4);
-    let conv_table2: [u8; 64] = (64..128).to_array().transpose_table(4);
+    let mut conv_table1: [u8; 64] = (0..64).to_array().transpose_table(4);
+    let mut conv_table2: [u8; 64] = (64..128).to_array().transpose_table(4);
 
     let v192 = vld1q_dup_u8(&0xc0);
     // read first 16 characters into register
     let v1 = vld1q_u8(&bytes[0]);
+    /*
+    00000000 11111111 11111111 00000000 00000000 11111111
+    >>
+    00000000 00000001 00000001 00000000 00000000 00000001
+
+    alternative:
+    00000000 11111111 11111111 00000000 00000000 11111111
+    or
+    00000001 00000000 00000000 00000001 00000001 00000000
+    =
+    00000001 11111111 11111111 00000001 00000001 11111111
+    */
     // This shifts indices down by 64. This allows us to index exclusively
     // the upper 64 ASCII characters.
     let v1_upper = vaddq_u8(v1, v192); // v1[i] = v[i] - 64;
@@ -119,6 +131,71 @@ unsafe fn proc4() {
     printx(index_1);
     printx(index_2);
 }
+unsafe fn proc5() {
+    //assume ascii (minimum 16 characters)
+    let bytes = "ln xy = 13 + 37;".as_bytes();
+
+    // look up tables
+    let mut conv_table1: [u8; 64] = (0..64).to_array().transpose_table(4);
+    let mut conv_table2: [u8; 64] = (64..128).to_array().transpose_table(4);
+    conv_table1
+        .iter_mut()
+        .chain(conv_table2.iter_mut())
+        .for_each(|c| {
+            if c.is_ascii_alphanumeric() {
+                *c = 0xff;
+            }
+        });
+    let conv1 = vld4q_u8(&conv_table1[0]);
+    let conv2 = vld4q_u8(&conv_table2[0]);
+    /*
+    Approach: overflow identifier recognition
+
+    First shuffle:
+    - 0 1 2 3 4 5 6 - 7 8 9 a b c d
+    |               |
+    +-------+-------+
+            |
+       carry holder
+    */
+    let vinput = vld1q_u8(&bytes[0]);
+    let carry_holder_mask = vld1q_dup_u64(&0xffffffffffffff00u64);
+    let carry_holder_mask = vreinterpretq_u8_u64(carry_holder_mask);
+    printx(carry_holder_mask);
+    let carry_shuffle: &[u8] = &[0, 0, 1, 2, 3, 4, 5, 6, 0, 7, 8, 9, 10, 11, 12, 13];
+    // load shuffle mask
+    let shuf1 = vld1q_u8(&carry_shuffle[0]);
+    // apply shuffle
+    let vinput_shuf = vqtbl1q_u8(vinput, shuf1);
+    // zero out carry 
+    let vinput_shuf = vandq_u8(vinput_shuf, carry_holder_mask);
+
+    // perform lookup
+    let v192 = vld1q_dup_u8(&0xc0);
+    let v1_upper = vaddq_u8(vinput_shuf, v192); // v1[i] = v[i] - 64;
+    let index_1 = vqtbl4q_u8(conv1, vinput_shuf);
+    let index_2 = vqtbl4q_u8(conv2, v1_upper);
+    let result = vorrq_u8(index_1, index_2);
+
+    // identifier map
+    let v0 = vld1q_dup_u8(&0xff);
+    let ident_filter = vceqq_u8(result, v0);
+    let ident_filter = vreinterpretq_u64_u8(ident_filter);
+
+    /*
+    s 1 1 s 1 1 1 s
+      s 1 1 s 1 1 1 s
+    s 1 0 s 1 0 0 s
+    s 1 0 s 1 0 0 s
+    
+    */
+    let ident_filter = vsraq_n_u64::<1>(ident_filter, ident_filter);
+    // look up in table
+    printx(vinput);
+    printx(vinput_shuf);
+    printx(result);
+    printx(ident_filter);
+}
 unsafe fn main_() {
-    proc4();
+    proc5();
 }
