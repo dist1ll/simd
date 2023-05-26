@@ -133,7 +133,7 @@ unsafe fn proc4() {
 }
 unsafe fn proc5() {
     //assume ascii (minimum 16 characters)
-    let bytes = "ln xy = 13 + 37;".as_bytes();
+    let bytes = "ln foo = 13 + 37".as_bytes();
 
     // look up tables
     let mut conv_table1: [u8; 64] = (0..64).to_array().transpose_table(4);
@@ -161,40 +161,38 @@ unsafe fn proc5() {
     let vinput = vld1q_u8(&bytes[0]);
     let carry_holder_mask = vld1q_dup_u64(&0xffffffffffffff00u64);
     let carry_holder_mask = vreinterpretq_u8_u64(carry_holder_mask);
-    printx(carry_holder_mask);
-    let carry_shuffle: &[u8] = &[0, 0, 1, 2, 3, 4, 5, 6, 0, 7, 8, 9, 10, 11, 12, 13];
+
+    let carry_shuffle: &[u8] = &[0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
     // load shuffle mask
     let shuf1 = vld1q_u8(&carry_shuffle[0]);
-    // apply shuffle
-    let vinput_shuf = vqtbl1q_u8(vinput, shuf1);
-    // zero out carry 
-    let vinput_shuf = vandq_u8(vinput_shuf, carry_holder_mask);
 
     // perform lookup
     let v192 = vld1q_dup_u8(&0xc0);
-    let v1_upper = vaddq_u8(vinput_shuf, v192); // v1[i] = v[i] - 64;
-    let index_1 = vqtbl4q_u8(conv1, vinput_shuf);
+    let v1_upper = vaddq_u8(vinput, v192); // v1[i] = v[i] - 64;
+    let index_1 = vqtbl4q_u8(conv1, vinput);
     let index_2 = vqtbl4q_u8(conv2, v1_upper);
-    let result = vorrq_u8(index_1, index_2);
+    let mapped = vorrq_u8(index_1, index_2);
 
-    // identifier map
-    let v0 = vld1q_dup_u8(&0xff);
-    let ident_filter = vceqq_u8(result, v0);
-    let ident_filter = vreinterpretq_u64_u8(ident_filter);
+    // apply shuffle
+    let mapped_shuf = vqtbl1q_u8(mapped, shuf1);
+    // zero out carry 
+    let mapped_shuf = vandq_u8(mapped_shuf, carry_holder_mask);
 
+    // check for equality
+    let equality_map = vceqq_u8(mapped, mapped_shuf);
+    let masked = veorq_u8(mapped, equality_map);
     /*
     s 1 1 s 1 1 1 s
       s 1 1 s 1 1 1 s
     s 1 0 s 1 0 0 s
     s 1 0 s 1 0 0 s
-    
     */
-    let ident_filter = vsraq_n_u64::<1>(ident_filter, ident_filter);
     // look up in table
     printx(vinput);
-    printx(vinput_shuf);
-    printx(result);
-    printx(ident_filter);
+    printx(mapped);
+    printx(mapped_shuf);
+    printx(equality_map);
+    printx(masked);
 }
 unsafe fn main_() {
     proc5();
