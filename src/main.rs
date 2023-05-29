@@ -131,10 +131,16 @@ unsafe fn proc4() {
     printx(index_1);
     printx(index_2);
 }
+
 unsafe fn proc5() {
     //assume ascii (minimum 16 characters)
-    let bytes = "ln foo = 13 + 37".as_bytes();
+    let bytes1 = "01234a670123; fo".as_bytes();
+    let bytes2 = "oo .-.-.-.-.-:::".as_bytes();
+    proc6(&bytes1[0]);
+    proc6(&bytes2[0]);
+}
 
+unsafe fn proc6(input: *const u8) {
     // look up tables
     let mut conv_table1: [u8; 64] = (0..64).to_array().transpose_table(4);
     let mut conv_table2: [u8; 64] = (64..128).to_array().transpose_table(4);
@@ -142,8 +148,14 @@ unsafe fn proc5() {
         .iter_mut()
         .chain(conv_table2.iter_mut())
         .for_each(|c| {
-            if c.is_ascii_alphanumeric() {
+            if c.is_ascii_alphabetic() {
                 *c = 0xff;
+            }
+            if c.is_ascii_whitespace() {
+                *c = 0xfd;
+            }
+            if c.is_ascii_digit() {
+                *c = 0xfe;
             }
         });
     let conv1 = vld4q_u8(&conv_table1[0]);
@@ -158,9 +170,9 @@ unsafe fn proc5() {
             |
        carry holder
     */
-    let vinput = vld1q_u8(&bytes[0]);
-    let carry_holder_mask = vld1q_dup_u64(&0xffffffffffffff00u64);
-    let carry_holder_mask = vreinterpretq_u8_u64(carry_holder_mask);
+    let vinput = vld1q_u8(input);
+    let c = 0xffffffffffffffffffffffffffffff00u128;
+    let carry_holder_mask = vld1q_u8(&c as *const _ as *const _);
 
     let carry_shuffle: &[u8] = &[0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
     // load shuffle mask
@@ -175,12 +187,18 @@ unsafe fn proc5() {
 
     // apply shuffle
     let mapped_shuf = vqtbl1q_u8(mapped, shuf1);
-    // zero out carry 
+    // zero out carry
     let mapped_shuf = vandq_u8(mapped_shuf, carry_holder_mask);
 
     // check for equality
     let equality_map = vceqq_u8(mapped, mapped_shuf);
-    let masked = veorq_u8(mapped, equality_map);
+    // ignore equality check for multi-char tokens (i.e. char map >= 128)
+    let v128 = vld1q_dup_u8(&0x80);
+    let greater_than = vcgtq_u8(mapped, v128);
+    let equality_map = vmvnq_u8(vandq_u8(greater_than, equality_map));
+
+    // xor the result with your mask
+    let masked = vandq_u8(mapped, equality_map);
     /*
     s 1 1 s 1 1 1 s
       s 1 1 s 1 1 1 s
@@ -188,10 +206,6 @@ unsafe fn proc5() {
     s 1 0 s 1 0 0 s
     */
     // look up in table
-    printx(vinput);
-    printx(mapped);
-    printx(mapped_shuf);
-    printx(equality_map);
     printx(masked);
 }
 unsafe fn main_() {
