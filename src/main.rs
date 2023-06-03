@@ -34,14 +34,14 @@ impl<T: Clone, const N: usize> TransposeTable<T, N> for [T; N] {
 unsafe fn printx<T>(t: T) {
     let x: u128 = unsafe { *std::mem::transmute::<&T, &u128>(&t) };
     let x: [u8; 16] = unsafe { *std::mem::transmute::<&T, &[u8; 16]>(&t) };
-    for i in x {
+    for i in x.iter().rev() {
         print!("{:0>2x} ", i);
     }
     println!("");
 }
 unsafe fn printb<T>(t: T) {
     let x: [u8; 16] = unsafe { *std::mem::transmute::<&T, &[u8; 16]>(&t) };
-    for i in x {
+    for i in x.iter().rev() {
         print!("{:0>8b} ", i);
     }
     println!("");
@@ -134,10 +134,8 @@ unsafe fn proc4() {
 
 unsafe fn proc5() {
     //assume ascii (minimum 16 characters)
-    let bytes1 = "01234a670123; fo".as_bytes();
-    let bytes2 = "oo .-.-.-.-.-:::".as_bytes();
+    let bytes1 = "let x=0;\nfoo(1);".as_bytes();
     proc6(&bytes1[0]);
-    proc6(&bytes2[0]);
 }
 
 unsafe fn proc6(input: *const u8) {
@@ -185,6 +183,11 @@ unsafe fn proc6(input: *const u8) {
     let index_2 = vqtbl4q_u8(conv2, v1_upper);
     let mapped = vorrq_u8(index_1, index_2);
 
+    printx(vinput);
+    printx(v1_upper);
+    printx(index_1);
+    printx(index_2);
+    printx(mapped);
     // apply shuffle
     let mapped_shuf = vqtbl1q_u8(mapped, shuf1);
     // zero out carry
@@ -206,8 +209,31 @@ unsafe fn proc6(input: *const u8) {
     s 1 0 s 1 0 0 s
     */
     // look up in table
-    printx(masked);
+}
+unsafe fn proc7() {
+    println!("hello world");
+    let c = 0xff00ff00ff00ff00ff00ff00ff00ff00u128;
+    let zero = vld1q_u8(&0u128 as *const _ as *const _);
+    let c = vld1q_u8(&c as *const _ as *const _);
+    let shift = vsraq_n_u8::<7>(zero, c);
+    let shift = vreinterpretq_u16_u8(shift);
+    let acc16 = vreinterpretq_u32_u16(vsraq_n_u16::<7>(shift, shift));
+    let acc32 = vreinterpretq_u64_u32(vsraq_n_u32::<14>(acc16, acc16));
+    let acc64 = vreinterpretq_u8_u64(vsraq_n_u64::<28>(acc32, acc32));
+    let result_low = vgetq_lane_u8::<0>(acc64);
+    let result_high = vgetq_lane_u8::<8>(acc64);
+    println!("{:b}", result_low);
+    println!("{:b}", result_high);
+    printb(c);
+    printb(shift);
+    printb(acc16);
+    printb(acc32);
+    printb(acc64);
+    println!(
+        "Result: {:b}",
+        (result_low as u16 + ((result_high as u16) << 8))
+    );
 }
 unsafe fn main_() {
-    proc5();
+    proc7();
 }
