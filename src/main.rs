@@ -234,6 +234,42 @@ unsafe fn proc7() {
         (result_low as u16 + ((result_high as u16) << 8))
     );
 }
+fn proc8_transform(idx: u8) -> u64 {
+    // let x = vec![];
+    let mut i = 0;
+    while i < 8 {
+        if idx & (1 << i) != 0 {
+            // current i is a starting point
+            let start = i;
+            let mut count = 1;
+            i += 1;
+            while i < 8 && ((idx & (1 << i)) != 0) {
+                count += 1;
+                i += 1;
+            }
+            println!("start: {start}, count: {count}");
+        }
+        i += 1;
+    }
+    9
+}
+unsafe fn proc8() {
+    println!("hello world");
+    let shift = 0x00fffefdfcfbfaf900fffefdfcfbfaf9u128;
+    let c = 0xff00ff00ff00ff00ff00ff00ff00ffffu128;
+    let shift = vld1q_u8(&shift as *const _ as *const _);
+    let c = vld1q_u8(&c as *const _ as *const _);
+    printb(c);
+    printb(shift);
+    let vmask = vandq_u8(c, vdupq_n_u8(0x80));
+    printb(vmask);
+    let vmask = vshlq_u8(vmask, vreinterpretq_s8_u8(shift));
+    printb(vmask);
+    let low = vaddv_u8(vget_low_u8(vmask));
+    let high = vaddv_u8(vget_high_u8(vmask));
+    println!("{:b} | transformed: {:b}", low, proc8_transform(low));
+    println!("{:b}", high);
+}
 unsafe fn main_() {
-    proc7();
+    proc8();
 }
