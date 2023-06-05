@@ -1,6 +1,7 @@
 #![allow(unused)]
 #![feature(inline_const)]
 #![feature(const_trait_impl)]
+#![feature(const_mut_refs)]
 
 use std::arch::aarch64::*;
 
@@ -234,29 +235,48 @@ unsafe fn proc7() {
         (result_low as u16 + ((result_high as u16) << 8))
     );
 }
-fn proc8_transform(idx: u8) -> u64 {
-    // let x = vec![];
-    let mut i = 0;
+const LUT_FFIDX: [u64; 256] = const {
+    let mut result = [0u64; 256];
+    let mut i = 0u8;
+    while i < 255 {
+        result[i as usize] = proc8_transform(i);
+        i += 1;
+    }
+    result
+};
+const fn proc8_transform(idx: u8) -> u64 {
+    let mut ff = [(0usize, 0u8); 8];
+    let mut len = 0;
+
+    let mut i = 0usize;
     while i < 8 {
         if idx & (1 << i) != 0 {
             // current i is a starting point
             let start = i;
-            let mut count = 1;
+            let mut count = 1u8;
             i += 1;
             while i < 8 && ((idx & (1 << i)) != 0) {
                 count += 1;
                 i += 1;
             }
-            println!("start: {start}, count: {count}");
+            ff[len] = (start, count);
+            len += 1;
         }
         i += 1;
     }
-    9
+    let mut result = 0u64;
+    let mut i = 0;
+    while i < len {
+        let (start, count) = ff[i];
+        result += ((0x80u8 + count) as u64) << (start * 8);
+        i += 1;
+    }
+    result
 }
 unsafe fn proc8() {
     println!("hello world");
     let shift = 0x00fffefdfcfbfaf900fffefdfcfbfaf9u128;
-    let c = 0xff00ff00ff00ff00ff00ff00ff00ffffu128;
+    let c = 0xff00ff00ff00ff00ff00ff00ffffffffu128;
     let shift = vld1q_u8(&shift as *const _ as *const _);
     let c = vld1q_u8(&c as *const _ as *const _);
     printb(c);
@@ -269,6 +289,7 @@ unsafe fn proc8() {
     let high = vaddv_u8(vget_high_u8(vmask));
     println!("{:b} | transformed: {:b}", low, proc8_transform(low));
     println!("{:b}", high);
+    println!("11100011 == {:b}", LUT_FFIDX[0b11100011]);
 }
 unsafe fn main_() {
     proc8();
