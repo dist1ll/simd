@@ -239,15 +239,14 @@ const LUT_FFIDX: [u64; 256] = const {
     let mut result = [0u64; 256];
     let mut i = 0u8;
     while i < 255 {
-        result[i as usize] = proc8_transform(i);
+        result[i as usize] = byte_pattern_to_mask(i);
         i += 1;
     }
     result
 };
-const fn proc8_transform(idx: u8) -> u64 {
+const fn byte_pattern_to_mask(idx: u8) -> u64 {
     let mut ff = [(0usize, 0u8); 8];
     let mut len = 0;
-
     let mut i = 0usize;
     while i < 8 {
         if idx & (1 << i) != 0 {
@@ -287,10 +286,71 @@ unsafe fn proc8() {
     printb(vmask);
     let low = vaddv_u8(vget_low_u8(vmask));
     let high = vaddv_u8(vget_high_u8(vmask));
-    println!("{:b} | transformed: {:b}", low, proc8_transform(low));
+    println!("{:b} | transformed: {:b}", low, byte_pattern_to_mask(low));
     println!("{:b}", high);
     println!("11100011 == {:b}", LUT_FFIDX[0b11100011]);
 }
+/// Proc9 is the same as [proc6], except that we try to interpret underscores
+/// as identifier characters, if they appear before, inside or after an alphabetical token
+unsafe fn proc9() {
+    let input: *const u8 = "ab_efo_  _  _  _ff".as_bytes().as_ptr();
+    // look up tables
+    let mut conv_table1: [u8; 64] = (0..64).to_array().transpose_table(4);
+    let mut conv_table2: [u8; 64] = (64..128).to_array().transpose_table(4);
+    conv_table1
+        .iter_mut()
+        .chain(conv_table2.iter_mut())
+        .for_each(|c| {
+            if c.is_ascii_alphabetic() {
+                *c = 0xff;
+            }
+            if c.is_ascii_whitespace() {
+                *c = 0xfd;
+            }
+            if c.is_ascii_digit() {
+                *c = 0xfe;
+            }
+        });
+    let conv1 = vld4q_u8(&conv_table1[0]);
+    let conv2 = vld4q_u8(&conv_table2[0]);
+    /*
+    Approach: overflow identifier recognition
+
+    First shuffle:
+    - 0 1 2 3 4 5 6 - 7 8 9 a b c d
+    |               |
+    +-------+-------+
+            |
+       carry holder
+    */
+    let vinput = vld1q_u8(input);
+    let c = 0xffffffffffffffffffffffffffffff00u128;
+    let carry_holder_mask = vld1q_u8(&c as *const _ as *const _);
+
+    let carry_shuffle: &[u8] = &[0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+    // load shuffle mask
+    let shuf1 = vld1q_u8(&carry_shuffle[0]);
+
+    // perform lookup
+    let v192 = vld1q_dup_u8(&0xc0);
+    let v1_upper = vaddq_u8(vinput, v192); // v1[i] = v[i] - 64;
+    let index_1 = vqtbl4q_u8(conv1, vinput);
+    let index_2 = vqtbl4q_u8(conv2, v1_upper);
+    let mapped = vorrq_u8(index_1, index_2);
+
+    // constants for underscore recognition
+    let underscore_upper = vld1q_dup_u16(&0x5fff);
+    let underscore_lower = vld1q_dup_u16(&0xff5f);
+
+    let underscore_1 = vceqq_u16(vreinterpretq_u16_u8(mapped), underscore_lower);
+    let underscore_2 = vceqq_u16(vreinterpretq_u16_u8(mapped), underscore_upper);
+
+    let underscore = vorrq_u16(underscore_1, underscore_2);
+
+    printx(vinput);
+    printx(mapped);
+    printx(underscore);
+}
 unsafe fn main_() {
-    proc8();
+    proc9();
 }
