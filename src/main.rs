@@ -351,6 +351,18 @@ unsafe fn proc9() {
     printx(mapped);
     printx(underscore);
 }
+unsafe fn proc10() {
+    let val1 = 0xffeeddccbbaa99887766554433221100u128;
+    let val2 = 0x00110011001100110011001100110011u128;
+    let v1 = vld1q_u8(&val1 as *const _ as *const _);
+    let v2 = vld1q_u8(&val2 as *const _ as *const _);
+    let vtrn = vtrn1q_u8(v1, v2);
+    let vext = vextq_u8::<8>(vtrn, vtrn);
+    printx(v1);
+    printx(v2);
+    printx(vtrn);
+    printx(vext);
+}
 unsafe fn main_() {
-    proc9();
+    proc10();
 }
