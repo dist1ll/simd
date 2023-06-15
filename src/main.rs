@@ -2,6 +2,7 @@
 #![feature(inline_const)]
 #![feature(const_trait_impl)]
 #![feature(const_mut_refs)]
+#![feature(stdsimd)]
 
 use std::arch::aarch64::*;
 
@@ -293,7 +294,7 @@ unsafe fn proc8() {
 /// Proc9 is the same as [proc6], except that we try to interpret underscores
 /// as identifier characters, if they appear before, inside or after an alphabetical token
 unsafe fn proc9() {
-    let input: *const u8 = "ab_efo_  _  _  _ff".as_bytes().as_ptr();
+    let input: *const u8 = "alt_er_ego_what_you".as_bytes().as_ptr();
     // look up tables
     let mut conv_table1: [u8; 64] = (0..64).to_array().transpose_table(4);
     let mut conv_table2: [u8; 64] = (64..128).to_array().transpose_table(4);
@@ -346,10 +347,11 @@ unsafe fn proc9() {
     let underscore_2 = vceqq_u16(vreinterpretq_u16_u8(mapped), underscore_upper);
 
     let underscore = vorrq_u16(underscore_1, underscore_2);
+    let result = vorrq_u8(mapped, vreinterpretq_u8_u16(underscore));
 
     printx(vinput);
     printx(mapped);
-    printx(underscore);
+    printx(result);
 }
 unsafe fn proc10() {
     let val1 = 0xffeeddccbbaa99887766554433221100u128;
@@ -363,6 +365,16 @@ unsafe fn proc10() {
     printx(vtrn);
     printx(vext);
 }
+unsafe fn proc11() {
+    let val1 = 0xffeeddccbbaa99887766554433221102u128;
+    let val2 = 0x2u128;
+    let v1 = vld1q_u64(&val1 as *const _ as *const _);
+    let v2 = vld1q_u64(&val2 as *const _ as *const _);
+    let res = vrax1q_u64(v1, v2);
+    printx(v1);
+    printx(v2);
+    printx(res);
+}
 unsafe fn main_() {
-    proc10();
+    proc9();
 }
