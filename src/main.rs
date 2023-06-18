@@ -294,7 +294,7 @@ unsafe fn proc8() {
 /// Proc9 is the same as [proc6], except that we try to interpret underscores
 /// as identifier characters, if they appear before, inside or after an alphabetical token
 unsafe fn proc9() {
-    let input: *const u8 = "alt_er_ego_what_you".as_bytes().as_ptr();
+    let input: *const u8 = "alt_er_ego what_you".as_bytes().as_ptr();
     // look up tables
     let mut conv_table1: [u8; 64] = (0..64).to_array().transpose_table(4);
     let mut conv_table2: [u8; 64] = (64..128).to_array().transpose_table(4);
@@ -303,7 +303,7 @@ unsafe fn proc9() {
         .chain(conv_table2.iter_mut())
         .for_each(|c| {
             if c.is_ascii_alphabetic() {
-                *c = 0xff;
+                *c = 0x80;
             }
             if c.is_ascii_whitespace() {
                 *c = 0xfd;
@@ -334,23 +334,29 @@ unsafe fn proc9() {
 
     // perform lookup
     let v192 = vld1q_dup_u8(&0xc0);
+
     let v1_upper = vaddq_u8(vinput, v192); // v1[i] = v[i] - 64;
     let index_1 = vqtbl4q_u8(conv1, vinput);
     let index_2 = vqtbl4q_u8(conv2, v1_upper);
     let mapped = vorrq_u8(index_1, index_2);
 
     // constants for underscore recognition
-    let underscore_upper = vld1q_dup_u16(&0x5fff);
-    let underscore_lower = vld1q_dup_u16(&0xff5f);
+    let vIdent = vld1q_dup_u8(&0x80);
+
+    let underscore_upper = vld1q_dup_u16(&0x5f80);
+    let underscore_lower = vld1q_dup_u16(&0x805f);
 
     let underscore_1 = vceqq_u16(vreinterpretq_u16_u8(mapped), underscore_lower);
     let underscore_2 = vceqq_u16(vreinterpretq_u16_u8(mapped), underscore_upper);
-
     let underscore = vorrq_u16(underscore_1, underscore_2);
+
+    let modified = vbslq_u8(vreinterpretq_u8_u16(underscore), vIdent, mapped);
     let result = vorrq_u8(mapped, vreinterpretq_u8_u16(underscore));
 
     printx(vinput);
     printx(mapped);
+    printx(underscore);
+    printx(modified);
     printx(result);
 }
 unsafe fn proc10() {
