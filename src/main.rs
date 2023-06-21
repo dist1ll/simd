@@ -276,20 +276,20 @@ const fn byte_pattern_to_mask(idx: u8) -> u64 {
 unsafe fn proc8() {
     println!("hello world");
     let shift = 0x00fffefdfcfbfaf900fffefdfcfbfaf9u128;
-    let c = 0xff00ff00ff00ff00ff00ff00ffffffffu128;
+    let c = 0x80008000800080008000808080u128;
     let shift = vld1q_u8(&shift as *const _ as *const _);
     let c = vld1q_u8(&c as *const _ as *const _);
-    printb(c);
-    printb(shift);
+    printx(c);
+    printx(shift);
     let vmask = vandq_u8(c, vdupq_n_u8(0x80));
-    printb(vmask);
+    printx(vmask);
     let vmask = vshlq_u8(vmask, vreinterpretq_s8_u8(shift));
-    printb(vmask);
+    printx(vmask);
     let low = vaddv_u8(vget_low_u8(vmask));
     let high = vaddv_u8(vget_high_u8(vmask));
     println!("{:b} | transformed: {:b}", low, byte_pattern_to_mask(low));
     println!("{:b}", high);
-    println!("11100011 == {:b}", LUT_FFIDX[0b11100011]);
+    println!("11100011 == {:x}", LUT_FFIDX[0b11100011]);
 }
 /// Proc9 is the same as [proc6], except that we try to interpret underscores
 /// as identifier characters, if they appear before, inside or after an alphabetical token
@@ -382,5 +382,5 @@ unsafe fn proc11() {
     printx(res);
 }
 unsafe fn main_() {
-    proc9();
+    proc8();
 }
