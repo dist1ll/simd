@@ -1,8 +1,6 @@
 #![allow(unused)]
-#![feature(inline_const)]
 #![feature(const_trait_impl)]
 #![feature(const_mut_refs)]
-#![feature(stdsimd)]
 
 use std::arch::aarch64::*;
 
@@ -381,6 +379,44 @@ unsafe fn proc11() {
     printx(v2);
     printx(res);
 }
+unsafe fn proc12() {
+    let arg_count = 3;
+    let val1 = 0x0f0e0d0c0b0a09080706050403020100_u128;
+    let mask = (u64::MAX as u128) >> (64 - arg_count * 8);
+    let v1 = vld1q_u64(&val1 as *const _ as *const _);
+    let maskv = vld1q_u8(&mask as *const _ as *const _);
+    let one = vld1q_dup_u8(&1);
+    let v1 = vaddq_u8(one, vreinterpretq_u8_u64(v1));
+    let red = vandq_u8(maskv, v1);
+    let red = vaddq_u8(red, vld1q_dup_u8(&0xff));
+
+    printx(v1);
+    printx(red);
+    eprintln!("sum: {}", vaddlvq_u8(red))
+}
+unsafe fn proc13() {
+    /* Set i-th position of original SIMD register to value 0xff */
+    let i = 4;
+    let v_original = vld1q_dup_u8(&0);
+    let v_value = vld1q_dup_u8(&0xdd);
+
+    let v_idx = 0x0f0e0d0c0b0a09080706050403020100_u128;
+    let v_idx = vld1q_u8(&v_idx as *const _ as *const _);
+    let v_match = vceqq_u8(v_idx, vld1q_dup_u8(&i));
+    let v_res = vbslq_u8(v_match, v_value, v_original);
+
+    printx(v_value);
+    printx(v_match);
+    printx(v_res);
+}
+/// Set runtime-known lane of 128-bit vector register
+unsafe fn vsetqdl_u8(src: uint8x16_t, value: u8, lane: u8) -> uint8x16_t {
+    let v_value = vld1q_dup_u8(&0xdd);
+    let v_idx = 0x0f0e0d0c0b0a09080706050403020100_u128;
+    let v_idx = vld1q_u8(&v_idx as *const _ as *const _);
+    let v_match = vceqq_u8(v_idx, vld1q_dup_u8(&lane));
+    vbslq_u8(v_match, v_value, src)
+}
 unsafe fn main_() {
-    proc8();
+    proc13();
 }
